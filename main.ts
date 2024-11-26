@@ -1,10 +1,11 @@
-import { MongoClient, ObjectId, OptionalId } from "mongodb";
+import { MongoClient } from "mongodb";
 import {
 	UserModel,
 	CartModel,
 	OrderModel,
 	ProductModel,
 	User,
+	Product,
 } from "./types.ts";
 import {
 	getUserFromModel,
@@ -40,7 +41,12 @@ const handler = async (req: Request): Promise<Response> => {
 			const users: User[] = userModels.map((um) => getUserFromModel(um));
 			return new Response(JSON.stringify(users), { status: 200 });
 		} else if (path === "/products") {
-			//
+			const prodModel: ProductModel[] = await productsCollection
+				.find()
+				.toArray();
+			const prod: Product[] = prodModel.map((pm) => getProductFromModel(pm));
+
+			return new Response(JSON.stringify(prod), { status: 200 });
 		} else if (path === "/carts") {
 			//
 		} else if (path === "/orders") {
@@ -82,9 +88,43 @@ const handler = async (req: Request): Promise<Response> => {
 				})
 			);
 		} else if (path === "/products") {
-			//
-		} else if (path === "/carts/products?userId=1") {
-			//
+			const body = await req.json();
+			if (!body.name || !body.price || !body.stock) {
+				return new Response(
+					JSON.stringify({
+						error: "Bad request missing fields in request body.",
+						status: 400,  
+					})
+				);
+			}
+			const { insertedId } = await productsCollection.insertOne({
+				name: body.name,
+				description: body.description,
+				price: body.price,
+				stock: body.stock,
+			});
+
+			// In case --> no description
+			if (body.description === null || body.description === "") {
+				return new Response(
+					JSON.stringify({
+						id: insertedId.toString(),
+						name: body.name,
+						price: body.price,
+						stock: body.stock,
+					})
+				);
+			}
+
+			return new Response(
+				JSON.stringify({
+					id: insertedId.toString(),
+					name: body.name,
+					description: body.description,
+					price: body.price,
+					stock: body.stock,
+				})
+			);
 		}
 	} else if (method === "PUT") {
 		if (path === "/products/:id") {
