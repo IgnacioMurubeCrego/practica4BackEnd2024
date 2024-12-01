@@ -6,12 +6,12 @@ import {
 	ProductModel,
 	User,
 	Product,
+	Order,
 } from "./types.ts";
 import {
 	getUserFromModel,
-	getCartFromModel,
-	getOrderFromModel,
 	getProductFromModel,
+	getOrderFromModel,
 } from "./utils.ts";
 
 const MONGO_URL = Deno.env.get("MONGO_URL");
@@ -103,7 +103,27 @@ const handler = async (req: Request): Promise<Response> => {
 				{ status: 200 }
 			);
 		} else if (path === "/orders") {
-			//
+			const userId = url.searchParams.get("userId");
+			if (!userId) {
+				return new Response("Missing param 'userId' in query", {
+					status: 400,
+				});
+			}
+
+			// Fetch orders for the given user ID
+			const orderModels: OrderModel[] = await ordersCollection
+				.find({ userId: new ObjectId(userId) })
+				.toArray();
+
+			// Map orders to the expected response format
+			const orders: Order[] = await Promise.all(
+				orderModels.map((orderModel) =>
+					getOrderFromModel(orderModel, productsCollection)
+				)
+			);
+
+			// Return the list of orders
+			return new Response(JSON.stringify(orders), { status: 200 });
 		}
 	} else if (method === "POST") {
 		if (path === "/users") {
@@ -286,7 +306,7 @@ const handler = async (req: Request): Promise<Response> => {
 				});
 			}
 
-			// Find the user's cart
+			// Find cart
 			const cart = await cartsCollection.findOne({
 				userId: new ObjectId(userId),
 			});
@@ -300,7 +320,7 @@ const handler = async (req: Request): Promise<Response> => {
 				);
 			}
 
-			// Check if user's cart is empty
+			// Check if cart is empty
 			if (cart.products.length === 0) {
 				return new Response(
 					`The cart of user with id:${userId} is empty, order canceled`,
@@ -308,7 +328,7 @@ const handler = async (req: Request): Promise<Response> => {
 				);
 			}
 
-			// Fetch product details from the products collection
+			// Get products in the cart
 			const productIds = cart.products.map((p) => p.productId);
 			const productModels: ProductModel[] = await productsCollection
 				.find({ _id: { $in: productIds.map((id) => new ObjectId(id)) } })
@@ -365,7 +385,7 @@ const handler = async (req: Request): Promise<Response> => {
 
 			const orderResult = await ordersCollection.insertOne(newOrder);
 
-			// Optionally, clear the user's cart after the order
+			// Clear user's cart after order
 			await cartsCollection.updateOne(
 				{ userId: new ObjectId(userId) },
 				{ $set: { products: [] } }
@@ -378,7 +398,7 @@ const handler = async (req: Request): Promise<Response> => {
 					userId: userId,
 					products: orderProducts,
 					total: total,
-					date: newOrder.date.toString().split("T")[0], // Format the date (YYYY-MM-DD)
+					date: newOrder.date.toISOString().split("T")[0], 
 				}),
 				{ status: 201 }
 			);
@@ -548,7 +568,7 @@ const handler = async (req: Request): Promise<Response> => {
 				}),
 				{ status: 200 }
 			);
-		} else if (path === "carts") {
+		} else if (path === "/carts") {
 			const userId = url.searchParams.get("userId");
 
 			if (!userId) {

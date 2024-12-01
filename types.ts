@@ -29,7 +29,7 @@ export type OrderModel = OptionalId<{
 
 export type Order = {
 	id: string;
-	userId: User;
+	userId: string;
 	products: CartProduct[];
 	total: number;
 	date: string;
